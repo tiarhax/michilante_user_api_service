@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct BusinessError {
-    message: String,
-    details: HashMap<String, Vec<String>>
+    pub message: String,
+    pub details: HashMap<String, Vec<String>>
 }
 
 impl BusinessError {

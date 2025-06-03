@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
-use aws_sdk_dynamodb::{primitives::DateTime, types::AttributeValue};
+use aws_sdk_dynamodb::{types::AttributeValue};
 use chrono::Utc;
-
-use crate::layers::business::usecases::list_cameras::interface::CameraListItem;
-
 use super::error::QCError;
-
+#[derive(Clone)]
 pub struct CameraListQueryResultItem {
     pub id: String,
     pub name: String,
@@ -36,16 +33,22 @@ pub struct ListCamerasQueryError(pub QCError);
 pub struct CreateCameraCommandError(pub QCError);
 
 pub trait ICameraQCCollection {
-    async fn list_cameras(&self) -> Result<Vec<CameraListQueryResultItem>, ListCamerasQueryError>;
-    async fn create_camera(
+    fn list_cameras(&self) -> impl std::future::Future<Output = Result<Vec<CameraListQueryResultItem>, ListCamerasQueryError>> + Send;
+    fn create_camera(
         &self,
         command_input: CreateCameraCommandInput,
-    ) -> Result<CreateCameraCommandOutput, CreateCameraCommandError>;
+    ) -> impl std::future::Future<Output = Result<CreateCameraCommandOutput, CreateCameraCommandError>> + Send;
 }
 
 pub struct CameraQCCollection {
     client: aws_sdk_dynamodb::Client,
     table: String,
+}
+
+impl CameraQCCollection {
+    pub fn new(client: aws_sdk_dynamodb::Client, table: String) -> Self {
+        Self { client, table }
+    }
 }
 pub struct CreateCameraCommandInput {
     pub name: String,

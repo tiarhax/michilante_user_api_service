@@ -1,6 +1,6 @@
 use crate::layers::business::shared::errors::UseCaseError;
 
-
+#[derive(Debug, Clone)]
 pub struct CameraListItem {
     pub id: String,
     pub name: String

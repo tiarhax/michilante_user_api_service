@@ -12,9 +12,9 @@ use crate::layers::{
         errors::{BusinessError, InternalDependencyError, UseCaseError},
         validation_rules::strings::non_empty,
     },
-    ewm::main_database::qc_collection::camera_qc_collection::{
+    ewm::{main_database::qc_collection::camera_qc_collection::{
         CreateCameraCommandInput, ICameraQCCollection,
-    },
+    }, permanent_stream_server::{AddStreamInput, IPermanentStreamServer}},
 };
 
 pub struct CreateCameraInput {
@@ -36,16 +36,19 @@ pub trait ICreateCameraUseCase {
     ) -> impl std::future::Future<Output = Result<CreateCameraOutput, UseCaseError>> + Send;
 }
 
-pub struct CreateCameraUseCase<IICamercaQCCollection>
+pub struct CreateCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
 where
     IICamercaQCCollection: ICameraQCCollection,
+    IIPermanentStreamServer: IPermanentStreamServer
 {
     camera_qc_collection: IICamercaQCCollection,
+    permanent_stream_server: IIPermanentStreamServer
 }
 
-impl<IICamercaQCCollection> CreateCameraUseCase<IICamercaQCCollection>
+impl<IICamercaQCCollection, IIPermanentStreamServer> CreateCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
 where
     IICamercaQCCollection: ICameraQCCollection,
+    IIPermanentStreamServer: IPermanentStreamServer
 {
     pub async fn execute(
         &self,
@@ -81,15 +84,23 @@ where
                     format!("{:?}", err),
                 ))
             })?;
-
+        let add_stream_request = AddStreamInput {
+            name: camera_command_result.id.clone(),
+            url: camera_command_result.source_url.clone(),
+        };
+        self.permanent_stream_server.add_stream(add_stream_request).await.map_err(|err| {
+            UseCaseError::InternalDependencyError(InternalDependencyError::new(
+                "Failed to add permanent stream".to_owned(),
+                format!("{:?}", err),
+            ))
+        })?;
         let create_camera_output = CreateCameraOutput {
             id: camera_command_result.id,
             name: camera_command_result.name,
             source_url: camera_command_result.source_url,
             created_at: camera_command_result.created_at,
             updated_at: camera_command_result.updated_at,
-        };
-        
+        };  
         Ok(create_camera_output)
     }
 
