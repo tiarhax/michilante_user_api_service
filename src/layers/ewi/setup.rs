@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
-use aws_config::BehaviorVersion;
+use aws_config::{BehaviorVersion, SdkConfig};
 use axum::{
     routing::{delete, get, post, put},
     Router,
 };
+
+use crate::layers::ewi::{appstate::{AppConfig, AppState}, endpoints};
+use std::env;
 
 
 
@@ -21,72 +24,53 @@ pub struct StartupServerError {
 struct ServerConfig {
     pub http_port: i32,
     pub http_host: String,
-    pub stream_expiration_time_in_minutes: i64,
-    pub root_url: String,
-    pub load_default_streams: bool,
-    pub table_name: String,
-    pub partition_key: String
-}
-fn read_config() -> Result<ServerConfig, ReadConfigErr> {
-    let http_port: i32 = std::env::var("HTTP_PORT")
-        .map_err(|_| ReadConfigErr {
-            reason: "HTTP_PORT not set or invalid".to_string(),
-        })?
-        .parse()
-        .map_err(|_| ReadConfigErr {
-            reason: "HTTP_PORT must be a valid integer".to_string(),
-        })?;
-
-    let http_host: String = std::env::var("HTTP_HOST").map_err(|_| ReadConfigErr {
-        reason: "HTTP_HOST not set".to_string(),
-    })?;
-
-    let stream_expiration_time_in_minutes: i64 = std::env::var("STREAM_EXPIRATION_TIME_IN_MINUTES")
-        .map_err(|_| ReadConfigErr {
-            reason: "STREAM_EXPIRATION_TIME_IN_MINUTES not set or invalid".to_string(),
-        })?
-        .parse()
-        .map_err(|_| ReadConfigErr {
-            reason: "STREAM_EXPIRATION_TIME_IN_MINUTES must be a valid integer".to_string(),
-        })?;
-
-    let root_url: String = std::env::var("ROOT_URL").map_err(|_| ReadConfigErr {
-        reason: "ROOT_URL not set".to_string(),
-    })?;
-
-    let load_default_streams: bool = std::env::var("LOAD_DEFAULT_STREAMS")
-        .map_err(|_| ReadConfigErr {
-            reason: "LOAD_DEFAULT_STREAMS not set or invalid".to_string(),
-        })?
-        .parse()
-        .map_err(|_| ReadConfigErr {
-            reason: "LOAD_DEFAULT_STREAMS must be a valid boolean".to_string(),
-        })?;
-    let table_name = std::env::var("TABLE_NAME")
-        .map_err(|_| ReadConfigErr {
-            reason: "TABLE_NAME not set or invalid".to_string(),
-        })?;
-
-    let partition_key = std::env::var("PARTITION_KEY")
-        .map_err(|_| ReadConfigErr {
-            reason: "PARTITION_KEY not set or invalid".to_string(),
-        })?;
-
-    Ok(ServerConfig {
-        http_port,
-        http_host,
-        stream_expiration_time_in_minutes,
-        root_url,
-        load_default_streams,
-        table_name,
-        partition_key,
-    })
 }
 
+
+fn read_server_config_from_env() -> Result<ServerConfig, ReadConfigErr> {
+    let http_port = env::var("HTTP_PORT")
+        .map_err(|err| ReadConfigErr {
+            reason: format!("Failed to read HTTP_PORT from env: {:?}", err),
+        })?
+        .parse::<i32>()
+        .map_err(|err| ReadConfigErr {
+            reason: format!("Failed to parse HTTP_PORT as i32: {:?}", err),
+        })?;
+
+    let http_host = env::var("HTTP_HOST").map_err(|err| ReadConfigErr {
+        reason: format!("Failed to read HTTP_HOST from env: {:?}", err),
+    })?;
+
+    Ok(ServerConfig { http_port, http_host })
+}
+fn read_app_config_from_env() -> Result<AppConfig, ReadConfigErr> {
+    let dynamo_db_table = env::var("DYNAMO_DB_TABLE").map_err(|err| ReadConfigErr {
+        reason: format!("Failed to read DYNAMO_DB_TABLE from env: {:?}", err),
+    })?;
+
+    Ok(AppConfig { dynamo_db_table })
+}
 pub async fn setup_and_run() -> Result<(), StartupServerError> {
-    
+    let aws_sdk_config = aws_config::load_defaults(BehaviorVersion::v2025_01_17()).await;
+    let app_config = read_app_config_from_env().map_err(|err| StartupServerError {
+        reason: format!("Failed to read app config: {:?}", err),
+    })?;
 
-    let app = Router::new();
+    let server_config = read_server_config_from_env().map_err(|err| StartupServerError {
+        reason: format!("Failed to read server config: {:?}", err),
+    })?;
+
+    let app_state = AppState {
+        app_config: AppConfig {
+            dynamo_db_table: "bananas".to_string(),
+        },
+        aws_config: aws_sdk_config
+    };
+
+    let app = Router::new()
+        .with_state(app_state);
+    endpoints::setup_routes(app);
+
     let bind_str = format!("{}:{}", server_config.http_host, server_config.http_port);
 
     tracing::info!("Starting server on {}", bind_str);

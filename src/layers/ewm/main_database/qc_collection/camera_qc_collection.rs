@@ -40,6 +40,8 @@ pub trait ICameraQCCollection {
     ) -> impl std::future::Future<Output = Result<CreateCameraCommandOutput, CreateCameraCommandError>> + Send;
 }
 
+#[derive(Clone)]
+
 pub struct CameraQCCollection {
     client: aws_sdk_dynamodb::Client,
     table: String,
