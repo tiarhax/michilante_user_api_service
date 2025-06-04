@@ -6,10 +6,11 @@ use axum::{
     Router,
 };
 
-use crate::layers::ewi::{appstate::{AppConfig, AppState}, endpoints};
+use crate::layers::ewi::{
+    appstate::{AppConfig, AppState},
+    endpoints,
+};
 use std::env;
-
-
 
 #[derive(Debug, Clone)]
 struct ReadConfigErr {
@@ -26,7 +27,6 @@ struct ServerConfig {
     pub http_host: String,
 }
 
-
 fn read_server_config_from_env() -> Result<ServerConfig, ReadConfigErr> {
     let http_port = env::var("HTTP_PORT")
         .map_err(|err| ReadConfigErr {
@@ -41,7 +41,10 @@ fn read_server_config_from_env() -> Result<ServerConfig, ReadConfigErr> {
         reason: format!("Failed to read HTTP_HOST from env: {:?}", err),
     })?;
 
-    Ok(ServerConfig { http_port, http_host })
+    Ok(ServerConfig {
+        http_port,
+        http_host,
+    })
 }
 fn read_app_config_from_env() -> Result<AppConfig, ReadConfigErr> {
     let dynamo_db_table = env::var("DYNAMO_DB_TABLE").map_err(|err| ReadConfigErr {
@@ -64,12 +67,10 @@ pub async fn setup_and_run() -> Result<(), StartupServerError> {
         app_config: AppConfig {
             dynamo_db_table: "bananas".to_string(),
         },
-        aws_config: aws_sdk_config
+        aws_config: aws_sdk_config,
     };
 
-    let app = Router::new()
-        .with_state(app_state);
-    endpoints::setup_routes(app);
+    let app = endpoints::setup_routes(Router::new()).with_state(app_state);
 
     let bind_str = format!("{}:{}", server_config.http_host, server_config.http_port);
 
@@ -79,7 +80,6 @@ pub async fn setup_and_run() -> Result<(), StartupServerError> {
         .map_err(|err| StartupServerError {
             reason: format!("Failed to bind to {}: {:?}", bind_str, err),
         })?;
-
 
     axum::serve(listener, app)
         .await
