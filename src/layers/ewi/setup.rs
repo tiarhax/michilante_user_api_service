@@ -54,6 +54,12 @@ fn read_app_config_from_env() -> Result<AppConfig, ReadConfigErr> {
     Ok(AppConfig { dynamo_db_table })
 }
 pub async fn setup_and_run() -> Result<(), StartupServerError> {
+    tracing_subscriber::fmt::init();
+    dotenvy::dotenv().map_err(|e| {
+        StartupServerError {
+            reason: format!("{:?}", e)
+        }
+    })?;
     let aws_sdk_config = aws_config::load_defaults(BehaviorVersion::v2025_01_17()).await;
     let app_config = read_app_config_from_env().map_err(|err| StartupServerError {
         reason: format!("Failed to read app config: {:?}", err),
@@ -64,9 +70,7 @@ pub async fn setup_and_run() -> Result<(), StartupServerError> {
     })?;
 
     let app_state = AppState {
-        app_config: AppConfig {
-            dynamo_db_table: "bananas".to_string(),
-        },
+        app_config,
         aws_config: aws_sdk_config,
     };
 

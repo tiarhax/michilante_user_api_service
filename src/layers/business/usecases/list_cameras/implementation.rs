@@ -26,6 +26,7 @@ impl<IICameraCommandQueryCollection> IListCamerasUseCase for ListCamerasUseCaseI
             .list_cameras()
             .await
             .map_err(|err| {
+                tracing::error!("{:?}", err);
                 UseCaseError::InternalDependencyError(
                     InternalDependencyError::new("failed to load cameras from database".to_string(), format!("{:?}", err))
                 )

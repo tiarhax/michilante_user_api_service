@@ -13,7 +13,7 @@ impl TryFrom<&HashMap<String, AttributeValue>> for CameraListQueryResultItem {
 
     fn try_from(value: &HashMap<String, AttributeValue>) -> Result<Self, Self::Error> {
         let id = value
-            .get("id")
+            .get("sortKey")
             .and_then(|v| v.as_s().ok())
             .ok_or_else(|| "Missing or invalid 'id' field".to_string())?
             .to_string();
@@ -70,9 +70,9 @@ impl ICameraQCCollection for CameraQCCollection {
             .client
             .query()
             .table_name(&self.table)
-            .key_condition_expression("#key = :yyyy")
-            .expression_attribute_names("#yr", "key")
-            .expression_attribute_values(":", AttributeValue::S("camera".to_string()))
+            .key_condition_expression("#partitionKey = :partitionKeyVal")
+            .expression_attribute_names("#partitionKey", "partitionKey")
+            .expression_attribute_values(":partitionKeyVal", AttributeValue::S("camera".to_string()))
             .send()
             .await
             .map_err(|err| {
