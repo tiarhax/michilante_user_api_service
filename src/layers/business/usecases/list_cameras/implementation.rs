@@ -1,4 +1,4 @@
-use crate::layers::{business::shared::errors::{InternalDependencyError, UseCaseError}, ewm::main_database::qc_collection::camera_qc_collection::{self, CameraQCCollection, ICameraQCCollection}};
+use crate::layers::{business::shared::errors::{InternalDependencyError, UseCaseError}, ewm::main_database::qc_collection::camera_qc_collection::{ ICameraQCCollection }};
 
 use super::interface::{CameraListItem, IListCamerasUseCase};
 
@@ -10,7 +10,7 @@ where IICameraCommandQueryCollection: ICameraQCCollection
 
 impl<IICameraCommandQueryCollection> ListCamerasUseCaseImp<IICameraCommandQueryCollection>
 where
-    IICameraCommandQueryCollection: ICameraQCCollection,
+    IICameraCommandQueryCollection: ICameraQCCollection + Sync,
 {
     pub fn new(camera_qc_collection: IICameraCommandQueryCollection) -> Self {
         Self { camera_qc_collection }
@@ -18,7 +18,7 @@ where
 }
 
 impl<IICameraCommandQueryCollection> IListCamerasUseCase for ListCamerasUseCaseImp<IICameraCommandQueryCollection>
-    where IICameraCommandQueryCollection: ICameraQCCollection
+    where IICameraCommandQueryCollection: ICameraQCCollection + Sync
 {
     async fn execute(&self) -> Result<Vec<CameraListItem>, UseCaseError> {
         let query_results = self

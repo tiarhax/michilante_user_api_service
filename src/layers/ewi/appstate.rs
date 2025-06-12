@@ -1,8 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
 use serde::Serialize;
-use tokio::sync::Mutex;
 //TODO: Find out how to shape AppState
 #[derive(Clone, Serialize)]
 pub struct StreamInfo {

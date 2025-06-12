@@ -10,5 +10,5 @@ pub struct CameraListItem {
 
 
 pub trait IListCamerasUseCase {
-    async fn execute(&self) -> Result<Vec<CameraListItem>, UseCaseError>;
+    fn execute(&self) -> impl std::future::Future<Output = Result<Vec<CameraListItem>, UseCaseError>> + Send;
 }
