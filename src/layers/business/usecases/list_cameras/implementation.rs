@@ -36,7 +36,8 @@ impl<IICameraCommandQueryCollection> IListCamerasUseCase for ListCamerasUseCaseI
             .map(|s| {
                 CameraListItem {
                     id: s.id,
-                    name: s.name
+                    name: s.name,
+                    source_url: s.source_url
                 }
             })
             .collect();
@@ -63,7 +64,7 @@ mod tests {
             }
         }
         
-        async fn create_camera(
+        async fn put_camera(
             &self,
             command_input: crate::layers::ewm::main_database::qc_collection::camera_qc_collection::CreateCameraCommandInput,
         ) -> Result<crate::layers::ewm::main_database::qc_collection::camera_qc_collection::CreateCameraCommandOutput, crate::layers::ewm::main_database::qc_collection::camera_qc_collection::CreateCameraCommandError> {
@@ -75,8 +76,8 @@ mod tests {
     async fn test_list_cameras_success() {
         let mock_collection = MockCameraQCCollection {
             cameras: vec![
-                CameraListQueryResultItem { id: 1.to_string(), name: "Camera 1".to_string() },
-                CameraListQueryResultItem { id: 2.to_string(), name: "Camera 2".to_string() },
+                CameraListQueryResultItem { id: 1.to_string(), name: "Camera 1".to_string(), source_url: "something".to_string() },
+                CameraListQueryResultItem { id: 2.to_string(), name: "Camera 2".to_string(), source_url: "something".to_string() },
             ],
             should_fail: false,
         };

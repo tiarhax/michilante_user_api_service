@@ -7,6 +7,7 @@ use super::error::QCError;
 pub struct CameraListQueryResultItem {
     pub id: String,
     pub name: String,
+    pub source_url: String
 }
 impl TryFrom<&HashMap<String, AttributeValue>> for CameraListQueryResultItem {
     type Error = String;
@@ -24,7 +25,13 @@ impl TryFrom<&HashMap<String, AttributeValue>> for CameraListQueryResultItem {
             .ok_or_else(|| "Missing or invalid 'name' field".to_string())?
             .to_string();
 
-        Ok(CameraListQueryResultItem { id, name })
+        let source_url = value
+            .get("url")
+            .and_then(|v| v.as_s().ok())
+            .ok_or_else(|| "Missing or invalid 'url' field".to_string())?
+            .to_string();
+
+        Ok(CameraListQueryResultItem { id, name, source_url })
     }
 }
 #[derive(Debug, Clone)]
@@ -34,7 +41,7 @@ pub struct CreateCameraCommandError(pub QCError);
 
 pub trait ICameraQCCollection {
     fn list_cameras(&self) -> impl std::future::Future<Output = Result<Vec<CameraListQueryResultItem>, ListCamerasQueryError>> + Send;
-    fn create_camera(
+    fn put_camera(
         &self,
         command_input: CreateCameraCommandInput,
     ) -> impl std::future::Future<Output = Result<CreateCameraCommandOutput, CreateCameraCommandError>> + Send;
@@ -100,7 +107,7 @@ impl ICameraQCCollection for CameraQCCollection {
         }
     }
 
-    async fn create_camera(
+    async fn put_camera(
         &self,
         command_input: CreateCameraCommandInput,
     ) -> Result<CreateCameraCommandOutput, CreateCameraCommandError> {

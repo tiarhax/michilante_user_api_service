@@ -1,2 +1,2 @@
 pub mod list_cameras;
-pub mod create_camera;
+pub mod upsert_camera;
