@@ -1,3 +1,4 @@
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -11,14 +12,16 @@ pub struct Stream {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AddStreamInput {
+    pub id: String,
     pub name: String,
     pub url: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AddStreamInputInternal {
+    pub id: String,
     pub name: String,
-    pub url: String,
+    pub source_url: String,
     pub down_scale: bool,
     pub expirable: bool
 }
@@ -37,13 +40,19 @@ pub struct PermanentStreamAPIError{
 }
 pub trait IPermanentStreamServer {
     fn list_streams(&self) -> impl std::future::Future<Output = Result<Vec<Stream>, PermanentStreamAPIError>> + Send;
-    fn add_stream(&self, input: AddStreamInput) -> impl std::future::Future<Output = Result<AddCreationOutput, PermanentStreamAPIError>> + Send;
+    fn put_stream(&self, input: AddStreamInput) -> impl std::future::Future<Output = Result<AddCreationOutput, PermanentStreamAPIError>> + Send;
     fn remove_stream(&self, id: String) -> impl std::future::Future<Output = Result<String, PermanentStreamAPIError>> + Send;
 
 }
 
 pub struct PermanentStreamServer {
     pub base_url: String
+}
+
+impl PermanentStreamServer {
+    pub fn new(base_url: String) -> Self {
+        PermanentStreamServer { base_url }
+    }
 }
 impl IPermanentStreamServer for PermanentStreamServer {
     async fn list_streams(&self) -> Result<Vec<Stream>, PermanentStreamAPIError> {
@@ -60,17 +69,19 @@ impl IPermanentStreamServer for PermanentStreamServer {
         Ok(streams)
     }
 
-    async fn add_stream(&self, input: AddStreamInput) -> Result<AddCreationOutput, PermanentStreamAPIError> {
+    async fn put_stream(&self, input: AddStreamInput) -> Result<AddCreationOutput, PermanentStreamAPIError> {
         let base_url = self.base_url.clone();
-        let url = format!("{}/streams", base_url);
+        let url = format!("{}/streams/permanent/{}", base_url, input.id);
+        tracing::info!("add stream url: {}", url);
         let client = reqwest::Client::new();
         let request_body = AddStreamInputInternal {
+            id: input.id,
             name: input.name,
-            url: input.url,
+            source_url: input.url,
             down_scale: false,
             expirable: false
         };
-        let response = client.post(&url)
+        let response = client.put(&url)
             .json(&request_body)
             .send()
             .await
@@ -78,9 +89,16 @@ impl IPermanentStreamServer for PermanentStreamServer {
                 message: "Failed to add stream".to_string(),
                 debug_message: err.to_string(),
             })?;
+        let status = response.status();
+        tracing::info!("add stream status code: {}", status);
+        if status != StatusCode::OK {
+            return Err(
+                PermanentStreamAPIError { message: format!("request failed with: {}", status), debug_message: format!("request failed with: {}", status) }
+            )
+        }
         let stream_output: AddCreationOutput = response.json().await.map_err(|err| PermanentStreamAPIError {
             message: "Failed to parse stream creation output".to_string(),
-            debug_message: err.to_string(),
+            debug_message: format!("{:?}", err),
         })?;
         Ok(stream_output)
     }

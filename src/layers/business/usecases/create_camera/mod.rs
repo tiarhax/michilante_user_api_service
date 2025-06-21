@@ -10,13 +10,13 @@ use crate::layers::{
             FieldValidationResult, UseCaseInputValidationResult, UseCaseInvalidInputResult,
         },
         errors::{BusinessError, InternalDependencyError, UseCaseError},
-        validation_rules::strings::non_empty,
+        validation_rules::{rtsp_url::rtsp_url, strings::non_empty},
     },
     ewm::{main_database::qc_collection::camera_qc_collection::{
         CreateCameraCommandInput, ICameraQCCollection,
     }, permanent_stream_server::{AddStreamInput, IPermanentStreamServer}},
 };
-
+#[derive(Debug)]
 pub struct CreateCameraInput {
     pub name: String,
     pub source_url: String,
@@ -43,6 +43,22 @@ where
 {
     camera_qc_collection: IICamercaQCCollection,
     permanent_stream_server: IIPermanentStreamServer
+}
+
+impl<IICamercaQCCollection, IIPermanentStreamServer> CreateCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
+where
+    IICamercaQCCollection: ICameraQCCollection,
+    IIPermanentStreamServer: IPermanentStreamServer
+{
+    pub fn new(
+        camera_qc_collection: IICamercaQCCollection,
+        permanent_stream_server: IIPermanentStreamServer,
+    ) -> Self {
+        Self {
+            camera_qc_collection,
+            permanent_stream_server,
+        }
+    }
 }
 
 impl<IICamercaQCCollection, IIPermanentStreamServer> CreateCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
@@ -84,14 +100,18 @@ where
                     format!("{:?}", err),
                 ))
             })?;
+        let id =  ulid::Ulid::new().to_string();
         let add_stream_request = AddStreamInput {
+            id,
             name: camera_command_result.id.clone(),
             url: camera_command_result.source_url.clone(),
         };
-        self.permanent_stream_server.add_stream(add_stream_request).await.map_err(|err| {
+        self.permanent_stream_server.put_stream(add_stream_request).await.map_err(|err| {
+            let debug_message = format!("{:?}", err);
+            tracing::error!("Failed to add permanent stream: {}", debug_message);
             UseCaseError::InternalDependencyError(InternalDependencyError::new(
                 "Failed to add permanent stream".to_owned(),
-                format!("{:?}", err),
+                debug_message,
             ))
         })?;
         let create_camera_output = CreateCameraOutput {
@@ -108,6 +128,7 @@ where
         &self,
         input: &CreateCameraSanitizedInput,
     ) -> UseCaseInputValidationResult {
+        tracing::info!("{:?}", input.0);
         let fields_validation_result: Vec<FieldValidationResult> = vec![
             non_empty(&input.0.name, "name", format!("{} cannot be empty", "name")),
             non_empty(
@@ -115,6 +136,7 @@ where
                 "source_url",
                 format!("{} cannot be empty", "source_url"),
             ),
+            rtsp_url(&input.0.source_url , "source_url", "must be a valid rtmp url")
         ];
         let mut feedback: HashMap<String, Vec<String>> = HashMap::new();
         for vr in fields_validation_result {

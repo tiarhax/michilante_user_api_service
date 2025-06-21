@@ -1,7 +1,7 @@
 use crate::layers::business::shared::sanitization_rules::{pipe_all, strings::{remove_double_spaces, trim_both_sides}};
 
 use super::CreateCameraInput;
-
+#[derive(Debug)]
 pub struct CreateCameraSanitizedInput(pub CreateCameraInput);
 
 
