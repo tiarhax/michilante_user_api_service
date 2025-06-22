@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use chrono::Utc;
@@ -9,10 +9,15 @@ use serde::{Deserialize, Serialize};
 use crate::layers::{
     business::usecases::{
         create_camera::{CreateCameraInput, CreateCameraOutput, CreateCameraUseCase},
+        delete_camera::{implementation::DeleteCameraUseCase, interface::IDeleteCameraUseCase},
         list_cameras::{
             implementation::ListCamerasUseCaseImp,
             interface::{CameraListItem, IListCamerasUseCase},
-        }, put_camera::{implementation::PutCameraUseCase, interface::{IPutCameraUseCase, PutCameraInput, PutCameraOutput}},
+        },
+        put_camera::{
+            implementation::PutCameraUseCase,
+            interface::{IPutCameraUseCase, PutCameraInput, PutCameraOutput},
+        },
     },
     ewi::{appstate::AppState, error::AppError, providers::permanent_stream_server},
     ewm::{
@@ -138,11 +143,11 @@ pub async fn put_camera(
     State(permanent_stream_server): State<PermanentStreamServer>,
     Json(input): Json<UpdateCameraHttpInput>,
 ) -> Result<Json<CameraUpdateHTTPResponseBody>, AppError> {
-
-    let update_camera_use_case = PutCameraUseCase::new(camera_qc_collection, permanent_stream_server);
+    let update_camera_use_case =
+        PutCameraUseCase::new(camera_qc_collection, permanent_stream_server);
     tracing::info!("id received from path {}", id);
 
-    let use_case_in =         PutCameraInput {
+    let use_case_in = PutCameraInput {
         id,
         name: input.name,
         source_url: input.source_url,
@@ -155,9 +160,24 @@ pub async fn put_camera(
     Ok(Json(use_case_out.into()))
 }
 
+pub async fn delete_camera(
+    Path(id): Path<String>,
+    State(camera_qc_collection): State<CameraQCCollection>,
+    State(permanent_stream_server): State<PermanentStreamServer>,
+) -> Result<(), AppError> {
+    let delete_camera_use_case =
+        DeleteCameraUseCase::new(camera_qc_collection, permanent_stream_server);
+    delete_camera_use_case
+        .execute(id)
+        .await
+        .map_err(|err| AppError::from_use_case_error(err, None))?;
+    Ok(())
+}
+
 pub fn setup_endpoints(router: Router<AppState>) -> Router<AppState> {
     router
         .route("/cameras", get(list_cameras))
         .route("/cameras", post(create_camera))
         .route("/cameras/{id}", put(put_camera))
+        .route("/cameras/{id}", delete(delete_camera))
 }

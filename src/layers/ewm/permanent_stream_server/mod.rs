@@ -41,7 +41,7 @@ pub struct PermanentStreamAPIError{
 pub trait IPermanentStreamServer {
     fn list_streams(&self) -> impl std::future::Future<Output = Result<Vec<Stream>, PermanentStreamAPIError>> + Send;
     fn put_stream(&self, input: AddStreamInput) -> impl std::future::Future<Output = Result<AddCreationOutput, PermanentStreamAPIError>> + Send;
-    fn remove_stream(&self, id: String) -> impl std::future::Future<Output = Result<String, PermanentStreamAPIError>> + Send;
+    fn remove_stream(&self, id: &str) -> impl std::future::Future<Output = Result<String, PermanentStreamAPIError>> + Send;
 
 }
 
@@ -103,7 +103,7 @@ impl IPermanentStreamServer for PermanentStreamServer {
         Ok(stream_output)
     }
 
-    async fn remove_stream(&self, id: String) -> Result<String, PermanentStreamAPIError> {
+    async fn remove_stream(&self, id: &str) -> Result<String, PermanentStreamAPIError> {
         let base_url = self.base_url.clone();
         let url = format!("{}/streams/{}", base_url, id);
         let client = reqwest::Client::new();
@@ -114,6 +114,6 @@ impl IPermanentStreamServer for PermanentStreamServer {
                 message: "Failed to remove stream".to_string(),
                 debug_message: err.to_string(),
             })?;
-        Ok(id)
+        Ok(id.to_owned())
     }
 }

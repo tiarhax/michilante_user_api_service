@@ -70,6 +70,13 @@ mod tests {
         ) -> Result<crate::layers::ewm::main_database::qc_collection::camera_qc_collection::CreateCameraCommandOutput, crate::layers::ewm::main_database::qc_collection::camera_qc_collection::CreateCameraCommandError> {
             todo!()
         }
+        
+        async fn delete_camera_by_id(
+            &self,
+            id: &str,
+        ) -> Result<(), crate::layers::ewm::main_database::qc_collection::camera_qc_collection::DeleteCameraCommandError> {
+            todo!()
+        }
     }
 
     #[tokio::test]

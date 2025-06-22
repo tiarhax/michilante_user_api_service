@@ -39,12 +39,20 @@ pub struct ListCamerasQueryError(pub QCError);
 #[derive(Debug, Clone)]
 pub struct CreateCameraCommandError(pub QCError);
 
+#[derive(Debug, Clone)]
+pub struct DeleteCameraCommandError(pub QCError);
+
 pub trait ICameraQCCollection {
     fn list_cameras(&self) -> impl std::future::Future<Output = Result<Vec<CameraListQueryResultItem>, ListCamerasQueryError>> + Send;
     fn put_camera(
         &self,
         command_input: PutCameraCommandInput,
     ) -> impl std::future::Future<Output = Result<CreateCameraCommandOutput, CreateCameraCommandError>> + Send;
+
+    fn delete_camera_by_id(
+        &self,
+        id: &str,
+    ) -> impl std::future::Future<Output = Result<(), DeleteCameraCommandError>> + Send;
 }
 
 #[derive(Clone)]
@@ -149,5 +157,27 @@ impl ICameraQCCollection for CameraQCCollection {
             })?;
 
         Ok(result)
+    }
+    
+    async fn delete_camera_by_id(
+        &self,
+        id: &str,
+    ) -> Result<(), DeleteCameraCommandError> {
+
+        self.client
+        .delete_item()
+        .table_name(&self.table)
+        .key("partitionKey", AttributeValue::S("camera".to_string()))
+        .key("sortKey", AttributeValue::S(id.to_owned()))
+        .send()
+        .await
+        .map_err(|err| {
+            DeleteCameraCommandError(QCError::new(
+                "failed to delete camera from database".to_string(),
+                Some(format!("{:?}", err)),
+            ))
+        })?;
+
+        Ok(())
     }
 }
