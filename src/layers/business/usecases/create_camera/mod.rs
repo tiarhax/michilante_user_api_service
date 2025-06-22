@@ -2,7 +2,7 @@ pub mod sanitization_rules;
 use std::collections::HashMap;
 
 use chrono::Utc;
-use sanitization_rules::UpsertCameraSanitizedInput;
+use sanitization_rules::CreateCameraSanitizedInput;
 
 use crate::layers::{
     business::shared::{
@@ -13,17 +13,16 @@ use crate::layers::{
         validation_rules::{rtsp_url::rtsp_url, strings::non_empty},
     },
     ewm::{main_database::qc_collection::camera_qc_collection::{
-        CreateCameraCommandInput, ICameraQCCollection,
+        PutCameraCommandInput, ICameraQCCollection,
     }, permanent_stream_server::{AddStreamInput, IPermanentStreamServer}},
 };
 #[derive(Debug)]
-pub struct UpsertCameraInput {
-    pub id: Option<String>,
+pub struct CreateCameraInput {
     pub name: String,
     pub source_url: String,
 }
 
-pub struct PutCameraOutput {
+pub struct CreateCameraOutput {
     pub id: String,
     pub name: String,
     pub source_url: String,
@@ -33,11 +32,11 @@ pub struct PutCameraOutput {
 
 pub trait ICreateCameraUseCase {
     fn execute(
-        input: UpsertCameraInput,
-    ) -> impl std::future::Future<Output = Result<PutCameraOutput, UseCaseError>> + Send;
+        input: CreateCameraInput,
+    ) -> impl std::future::Future<Output = Result<CreateCameraOutput, UseCaseError>> + Send;
 }
 
-pub struct UpsertCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
+pub struct CreateCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
 where
     IICamercaQCCollection: ICameraQCCollection,
     IIPermanentStreamServer: IPermanentStreamServer
@@ -46,7 +45,7 @@ where
     permanent_stream_server: IIPermanentStreamServer
 }
 
-impl<IICamercaQCCollection, IIPermanentStreamServer> UpsertCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
+impl<IICamercaQCCollection, IIPermanentStreamServer> CreateCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
 where
     IICamercaQCCollection: ICameraQCCollection,
     IIPermanentStreamServer: IPermanentStreamServer
@@ -62,16 +61,16 @@ where
     }
 }
 
-impl<IICamercaQCCollection, IIPermanentStreamServer> UpsertCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
+impl<IICamercaQCCollection, IIPermanentStreamServer> CreateCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
 where
     IICamercaQCCollection: ICameraQCCollection,
     IIPermanentStreamServer: IPermanentStreamServer
 {
     pub async fn execute(
         &self,
-        input: UpsertCameraInput,
-    ) -> Result<PutCameraOutput, UseCaseError> {
-        let sanitized_input: UpsertCameraSanitizedInput = input.try_into().map_err(|err| {
+        input: CreateCameraInput,
+    ) -> Result<CreateCameraOutput, UseCaseError> {
+        let sanitized_input: CreateCameraSanitizedInput = input.try_into().map_err(|err| {
             UseCaseError::InternalDependencyError(InternalDependencyError::new(
                 "Failed to sanitize input".to_owned(),
                 err,
@@ -86,7 +85,8 @@ where
             )));
         }
 
-        let creation_command = CreateCameraCommandInput {
+        let creation_command = PutCameraCommandInput {
+            id: None,
             name: sanitized_input.0.name,
             source_url: sanitized_input.0.source_url,
         };
@@ -115,7 +115,7 @@ where
                 debug_message,
             ))
         })?;
-        let create_camera_output = PutCameraOutput {
+        let create_camera_output = CreateCameraOutput {
             id: camera_command_result.id,
             name: camera_command_result.name,
             source_url: camera_command_result.source_url,
@@ -127,7 +127,7 @@ where
 
     async fn apply_business_rules(
         &self,
-        input: &UpsertCameraSanitizedInput,
+        input: &CreateCameraSanitizedInput,
     ) -> UseCaseInputValidationResult {
         tracing::info!("{:?}", input.0);
         let fields_validation_result: Vec<FieldValidationResult> = vec![

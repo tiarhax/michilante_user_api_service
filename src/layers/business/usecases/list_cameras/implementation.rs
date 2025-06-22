@@ -66,7 +66,7 @@ mod tests {
         
         async fn put_camera(
             &self,
-            command_input: crate::layers::ewm::main_database::qc_collection::camera_qc_collection::CreateCameraCommandInput,
+            command_input: crate::layers::ewm::main_database::qc_collection::camera_qc_collection::PutCameraCommandInput,
         ) -> Result<crate::layers::ewm::main_database::qc_collection::camera_qc_collection::CreateCameraCommandOutput, crate::layers::ewm::main_database::qc_collection::camera_qc_collection::CreateCameraCommandError> {
             todo!()
         }

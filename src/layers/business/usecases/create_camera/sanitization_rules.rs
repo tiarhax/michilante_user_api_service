@@ -1,15 +1,15 @@
 use crate::layers::business::shared::sanitization_rules::{pipe_all, strings::{remove_double_spaces, trim_both_sides}};
 
-use super::UpsertCameraInput;
+use super::CreateCameraInput;
 #[derive(Debug)]
-pub struct UpsertCameraSanitizedInput(pub UpsertCameraInput);
+pub struct CreateCameraSanitizedInput(pub CreateCameraInput);
 
 
-impl TryFrom<UpsertCameraInput> for UpsertCameraSanitizedInput {
+impl TryFrom<CreateCameraInput> for CreateCameraSanitizedInput {
     type Error = String;
     
-    fn try_from(value: UpsertCameraInput) -> Result<Self, Self::Error> {
-        let inner = UpsertCameraInput {
+    fn try_from(value: CreateCameraInput) -> Result<Self, Self::Error> {
+        let inner = CreateCameraInput {
             name: pipe_all( vec![
                 trim_both_sides,
                 remove_double_spaces
@@ -20,6 +20,6 @@ impl TryFrom<UpsertCameraInput> for UpsertCameraSanitizedInput {
             ], &value.source_url)?
         };
 
-        Ok(UpsertCameraSanitizedInput(inner))
+        Ok(CreateCameraSanitizedInput(inner))
     }
 }

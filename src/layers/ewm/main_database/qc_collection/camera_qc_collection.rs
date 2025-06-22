@@ -43,7 +43,7 @@ pub trait ICameraQCCollection {
     fn list_cameras(&self) -> impl std::future::Future<Output = Result<Vec<CameraListQueryResultItem>, ListCamerasQueryError>> + Send;
     fn put_camera(
         &self,
-        command_input: CreateCameraCommandInput,
+        command_input: PutCameraCommandInput,
     ) -> impl std::future::Future<Output = Result<CreateCameraCommandOutput, CreateCameraCommandError>> + Send;
 }
 
@@ -59,7 +59,8 @@ impl CameraQCCollection {
         Self { client, table }
     }
 }
-pub struct CreateCameraCommandInput {
+pub struct PutCameraCommandInput {
+    pub id: Option<String>,
     pub name: String,
     pub source_url: String,
 }
@@ -109,9 +110,9 @@ impl ICameraQCCollection for CameraQCCollection {
 
     async fn put_camera(
         &self,
-        command_input: CreateCameraCommandInput,
+        command_input: PutCameraCommandInput,
     ) -> Result<CreateCameraCommandOutput, CreateCameraCommandError> {
-        let id = ulid::Ulid::new().to_string();
+        let id = command_input.id.unwrap_or(ulid::Ulid::new().to_string());
         let partition_key = "camera";
         let sort_key = id.clone();
 
