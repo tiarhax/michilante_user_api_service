@@ -12,9 +12,12 @@ use crate::layers::{
         errors::{BusinessError, InternalDependencyError, UseCaseError},
         validation_rules::{rtsp_url::rtsp_url, strings::non_empty},
     },
-    ewm::{main_database::qc_collection::camera_qc_collection::{
-        PutCameraCommandInput, ICameraQCCollection,
-    }, permanent_stream_server::{AddStreamInput, IPermanentStreamServer}},
+    ewm::{
+        main_database::qc_collection::camera_qc_collection::{
+            ICameraQCCollection, PutCameraCommandInput,
+        },
+        permanent_stream_server::{AddStreamInput, IPermanentStreamServer},
+    },
 };
 #[derive(Debug)]
 pub struct CreateCameraInput {
@@ -39,16 +42,17 @@ pub trait ICreateCameraUseCase {
 pub struct CreateCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
 where
     IICamercaQCCollection: ICameraQCCollection,
-    IIPermanentStreamServer: IPermanentStreamServer
+    IIPermanentStreamServer: IPermanentStreamServer,
 {
     camera_qc_collection: IICamercaQCCollection,
-    permanent_stream_server: IIPermanentStreamServer
+    permanent_stream_server: IIPermanentStreamServer,
 }
 
-impl<IICamercaQCCollection, IIPermanentStreamServer> CreateCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
+impl<IICamercaQCCollection, IIPermanentStreamServer>
+    CreateCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
 where
     IICamercaQCCollection: ICameraQCCollection,
-    IIPermanentStreamServer: IPermanentStreamServer
+    IIPermanentStreamServer: IPermanentStreamServer,
 {
     pub fn new(
         camera_qc_collection: IICamercaQCCollection,
@@ -61,10 +65,11 @@ where
     }
 }
 
-impl<IICamercaQCCollection, IIPermanentStreamServer> CreateCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
+impl<IICamercaQCCollection, IIPermanentStreamServer>
+    CreateCameraUseCase<IICamercaQCCollection, IIPermanentStreamServer>
 where
     IICamercaQCCollection: ICameraQCCollection,
-    IIPermanentStreamServer: IPermanentStreamServer
+    IIPermanentStreamServer: IPermanentStreamServer,
 {
     pub async fn execute(
         &self,
@@ -84,11 +89,31 @@ where
                 invalid_result.feedback,
             )));
         }
+        let id = ulid::Ulid::new().to_string();
+
+        let add_stream_request = AddStreamInput {
+            id: id.clone(),
+            name: sanitized_input.0.name.clone(),
+            url: sanitized_input.0.name.clone(),
+        };
+        let permanent_server_response = self
+            .permanent_stream_server
+            .put_stream(add_stream_request)
+            .await
+            .map_err(|err| {
+                let debug_message = format!("{:?}", err);
+                tracing::error!("Failed to add permanent stream: {}", debug_message);
+                UseCaseError::InternalDependencyError(InternalDependencyError::new(
+                    "Failed to add permanent stream".to_owned(),
+                    debug_message,
+                ))
+            })?;
 
         let creation_command = PutCameraCommandInput {
-            id: None,
+            id: Some(id.clone()),
             name: sanitized_input.0.name,
             source_url: sanitized_input.0.source_url,
+            permanent_stream_url: Some(permanent_server_response.url),
         };
 
         let camera_command_result = self
@@ -101,27 +126,14 @@ where
                     format!("{:?}", err),
                 ))
             })?;
-        let id =  ulid::Ulid::new().to_string();
-        let add_stream_request = AddStreamInput {
-            id,
-            name: camera_command_result.id.clone(),
-            url: camera_command_result.source_url.clone(),
-        };
-        self.permanent_stream_server.put_stream(add_stream_request).await.map_err(|err| {
-            let debug_message = format!("{:?}", err);
-            tracing::error!("Failed to add permanent stream: {}", debug_message);
-            UseCaseError::InternalDependencyError(InternalDependencyError::new(
-                "Failed to add permanent stream".to_owned(),
-                debug_message,
-            ))
-        })?;
+
         let create_camera_output = CreateCameraOutput {
             id: camera_command_result.id,
             name: camera_command_result.name,
             source_url: camera_command_result.source_url,
             created_at: camera_command_result.created_at,
             updated_at: camera_command_result.updated_at,
-        };  
+        };
         Ok(create_camera_output)
     }
 
@@ -137,7 +149,11 @@ where
                 "source_url",
                 format!("{} cannot be empty", "source_url"),
             ),
-            rtsp_url(&input.0.source_url , "source_url", "must be a valid rtmp url")
+            rtsp_url(
+                &input.0.source_url,
+                "source_url",
+                "must be a valid rtmp url",
+            ),
         ];
         let mut feedback: HashMap<String, Vec<String>> = HashMap::new();
         for vr in fields_validation_result {

@@ -46,6 +46,7 @@ impl<IICameraCommandQueryCollection> IListCamerasUseCase for ListCamerasUseCaseI
 }
 #[cfg(test)]
 mod tests {
+
     use crate::layers::ewm::main_database::qc_collection::{camera_qc_collection::{CameraListQueryResultItem, ListCamerasQueryError}, error::QCError};
 
     use super::*;
@@ -76,6 +77,31 @@ mod tests {
             id: &str,
         ) -> Result<(), crate::layers::ewm::main_database::qc_collection::camera_qc_collection::DeleteCameraCommandError> {
             todo!()
+        }
+        
+        fn find_camera_by_id(
+            &self,
+            id: &str,
+        ) -> impl std::future::Future<Output = Result<crate::layers::ewm::main_database::qc_collection::camera_qc_collection::FindCameraByIdResult, crate::layers::ewm::main_database::qc_collection::camera_qc_collection::FindCamerabyIdError>> + Send {
+            async move {
+                Ok(crate::layers::ewm::main_database::qc_collection::camera_qc_collection::FindCameraByIdResult {
+                    id: "1".to_string(),
+                    name: "Mock Camera".to_string(),
+                    source_url: "mock://camera".to_string(),
+                    created_at: chrono::Utc::now(),
+                    updated_at: chrono::Utc::now(),
+                    permanent_stream_url: None
+                })
+            }
+        }
+        
+        fn camera_exists_by_id(
+            &self,
+            id: &str,
+        ) -> impl std::future::Future<Output = Result<bool, crate::layers::ewm::main_database::qc_collection::camera_qc_collection::CheckIfCameraExistsError>> + Send {
+            async move {
+                Ok(true)
+            }
         }
     }
 

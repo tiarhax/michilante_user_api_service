@@ -10,6 +10,9 @@ use crate::layers::{
     business::usecases::{
         create_camera::{CreateCameraInput, CreateCameraOutput, CreateCameraUseCase},
         delete_camera::{implementation::DeleteCameraUseCase, interface::IDeleteCameraUseCase},
+        get_camera_stream_url::{
+            implementation::GetCameraStreamUrlUseCase, interface::IGetCameraStremaURLUseCase,
+        },
         list_cameras::{
             implementation::ListCamerasUseCaseImp,
             interface::{CameraListItem, IListCamerasUseCase},
@@ -23,6 +26,7 @@ use crate::layers::{
     ewm::{
         main_database::qc_collection::camera_qc_collection::CameraQCCollection,
         permanent_stream_server::PermanentStreamServer,
+        temporary_stream_server::TemporaryStreamServer,
     },
 };
 
@@ -174,10 +178,35 @@ pub async fn delete_camera(
     Ok(())
 }
 
+#[derive(Serialize)]
+pub struct CameraStreamHttpResponseBody {
+    camera_id: String,
+    temp_rtsp_url: String,
+    expiration_date: String,
+}
+pub async fn get_camera_stream_url(
+    Path(id): Path<String>,
+    State(camera_qc_collection): State<CameraQCCollection>,
+    State(temporary_stream_server): State<TemporaryStreamServer>,
+) -> Result<Json<CameraStreamHttpResponseBody>, AppError> {
+    let get_stream_url_use_case =
+        GetCameraStreamUrlUseCase::new(camera_qc_collection, temporary_stream_server);
+    let out = get_stream_url_use_case
+        .execute(&id)
+        .await
+        .map_err(|err| AppError::from_use_case_error(err, None))?;
+    Ok(Json(CameraStreamHttpResponseBody {
+        camera_id: out.camera_id,
+        temp_rtsp_url: out.temp_rtsp_url,
+        expiration_date: out.expiration_date.to_rfc3339(),
+    }))
+}
+
 pub fn setup_endpoints(router: Router<AppState>) -> Router<AppState> {
     router
         .route("/cameras", get(list_cameras))
         .route("/cameras", post(create_camera))
         .route("/cameras/{id}", put(put_camera))
         .route("/cameras/{id}", delete(delete_camera))
+        .route("/cameras/{id}/temp-stream", get(get_camera_stream_url))
 }

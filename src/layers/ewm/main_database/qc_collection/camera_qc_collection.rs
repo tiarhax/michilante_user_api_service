@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use aws_sdk_dynamodb::{types::AttributeValue};
-use chrono::Utc;
 use super::error::QCError;
+use aws_sdk_dynamodb::types::AttributeValue;
+use chrono::Utc;
 #[derive(Clone)]
 pub struct CameraListQueryResultItem {
     pub id: String,
     pub name: String,
-    pub source_url: String
+    pub source_url: String,
 }
 impl TryFrom<&HashMap<String, AttributeValue>> for CameraListQueryResultItem {
     type Error = String;
@@ -31,7 +31,11 @@ impl TryFrom<&HashMap<String, AttributeValue>> for CameraListQueryResultItem {
             .ok_or_else(|| "Missing or invalid 'url' field".to_string())?
             .to_string();
 
-        Ok(CameraListQueryResultItem { id, name, source_url })
+        Ok(CameraListQueryResultItem {
+            id,
+            name,
+            source_url,
+        })
     }
 }
 #[derive(Debug, Clone)]
@@ -42,17 +46,38 @@ pub struct CreateCameraCommandError(pub QCError);
 #[derive(Debug, Clone)]
 pub struct DeleteCameraCommandError(pub QCError);
 
+#[derive(Debug, Clone)]
+pub struct FindCamerabyIdError(pub QCError);
+
+#[derive(Debug, Clone)]
+pub struct CheckIfCameraExistsError(pub QCError);
+
 pub trait ICameraQCCollection {
-    fn list_cameras(&self) -> impl std::future::Future<Output = Result<Vec<CameraListQueryResultItem>, ListCamerasQueryError>> + Send;
+    fn list_cameras(
+        &self,
+    ) -> impl std::future::Future<
+        Output = Result<Vec<CameraListQueryResultItem>, ListCamerasQueryError>,
+    > + Send;
     fn put_camera(
         &self,
         command_input: PutCameraCommandInput,
-    ) -> impl std::future::Future<Output = Result<CreateCameraCommandOutput, CreateCameraCommandError>> + Send;
+    ) -> impl std::future::Future<Output = Result<CreateCameraCommandOutput, CreateCameraCommandError>>
+           + Send;
 
     fn delete_camera_by_id(
         &self,
         id: &str,
     ) -> impl std::future::Future<Output = Result<(), DeleteCameraCommandError>> + Send;
+
+    fn find_camera_by_id(
+        &self,
+        id: &str,
+    ) -> impl std::future::Future<Output = Result<FindCameraByIdResult, FindCamerabyIdError>> + Send;
+
+    fn camera_exists_by_id(
+        &self,
+        id: &str,
+    ) -> impl std::future::Future<Output = Result<bool, CheckIfCameraExistsError>> + Send;
 }
 
 #[derive(Clone)]
@@ -71,12 +96,23 @@ pub struct PutCameraCommandInput {
     pub id: Option<String>,
     pub name: String,
     pub source_url: String,
+    pub permanent_stream_url: Option<String>,
 }
 
 pub struct CreateCameraCommandOutput {
     pub id: String,
     pub name: String,
     pub source_url: String,
+    pub permanent_stream_url: Option<String>,
+    pub created_at: chrono::DateTime<Utc>,
+    pub updated_at: chrono::DateTime<Utc>,
+}
+
+pub struct FindCameraByIdResult {
+    pub id: String,
+    pub name: String,
+    pub source_url: String,
+    pub permanent_stream_url: Option<String>,
     pub created_at: chrono::DateTime<Utc>,
     pub updated_at: chrono::DateTime<Utc>,
 }
@@ -88,7 +124,10 @@ impl ICameraQCCollection for CameraQCCollection {
             .table_name(&self.table)
             .key_condition_expression("#partitionKey = :partitionKeyVal")
             .expression_attribute_names("#partitionKey", "partitionKey")
-            .expression_attribute_values(":partitionKeyVal", AttributeValue::S("camera".to_string()))
+            .expression_attribute_values(
+                ":partitionKeyVal",
+                AttributeValue::S("camera".to_string()),
+            )
             .send()
             .await
             .map_err(|err| {
@@ -128,10 +167,14 @@ impl ICameraQCCollection for CameraQCCollection {
             id,
             name: command_input.name,
             source_url: command_input.source_url,
+            permanent_stream_url: command_input.permanent_stream_url,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
-
+        let permanent_stream_url = match &result.permanent_stream_url {
+            Some(s) => AttributeValue::S(s.clone()),
+            None => AttributeValue::Null(true),
+        };
         self.client
             .put_item()
             .table_name(&self.table)
@@ -139,6 +182,7 @@ impl ICameraQCCollection for CameraQCCollection {
             .item("sortKey", AttributeValue::S(sort_key.to_string()))
             .item("name", AttributeValue::S(result.name.clone()))
             .item("url", AttributeValue::S(result.source_url.clone()))
+            .item("permanentStreamUrl", permanent_stream_url)
             .item(
                 "createdAt",
                 AttributeValue::S(result.created_at.to_rfc3339()),
@@ -158,26 +202,144 @@ impl ICameraQCCollection for CameraQCCollection {
 
         Ok(result)
     }
-    
-    async fn delete_camera_by_id(
-        &self,
-        id: &str,
-    ) -> Result<(), DeleteCameraCommandError> {
 
+    async fn delete_camera_by_id(&self, id: &str) -> Result<(), DeleteCameraCommandError> {
         self.client
-        .delete_item()
-        .table_name(&self.table)
-        .key("partitionKey", AttributeValue::S("camera".to_string()))
-        .key("sortKey", AttributeValue::S(id.to_owned()))
-        .send()
-        .await
-        .map_err(|err| {
-            DeleteCameraCommandError(QCError::new(
-                "failed to delete camera from database".to_string(),
-                Some(format!("{:?}", err)),
-            ))
-        })?;
+            .delete_item()
+            .table_name(&self.table)
+            .key("partitionKey", AttributeValue::S("camera".to_string()))
+            .key("sortKey", AttributeValue::S(id.to_owned()))
+            .send()
+            .await
+            .map_err(|err| {
+                DeleteCameraCommandError(QCError::new(
+                    "failed to delete camera from database".to_string(),
+                    Some(format!("{:?}", err)),
+                ))
+            })?;
 
         Ok(())
+    }
+
+    async fn find_camera_by_id(
+        &self,
+        id: &str,
+    ) -> Result<FindCameraByIdResult, FindCamerabyIdError> {
+        let result = self
+            .client
+            .get_item()
+            .table_name(&self.table)
+            .key("partitionKey", AttributeValue::S("camera".to_string()))
+            .key("sortKey", AttributeValue::S(id.to_string()))
+            .send()
+            .await
+            .map_err(|err| {
+                FindCamerabyIdError(QCError::new(
+                    "failed to fetch camera from database".to_string(),
+                    Some(format!("{:?}", err)),
+                ))
+            })?;
+
+        if let Some(item) = result.item {
+            let id = item
+                .get("sortKey")
+                .and_then(|v| v.as_s().ok())
+                .ok_or_else(|| {
+                    FindCamerabyIdError(QCError::new(
+                        "Missing or invalid 'id' field".to_string(),
+                        None,
+                    ))
+                })?
+                .to_string();
+
+            let name = item
+                .get("name")
+                .and_then(|v| v.as_s().ok())
+                .ok_or_else(|| {
+                    FindCamerabyIdError(QCError::new(
+                        "Missing or invalid 'name' field".to_string(),
+                        None,
+                    ))
+                })?
+                .to_string();
+
+            let source_url = item
+                .get("url")
+                .and_then(|v| v.as_s().ok())
+                .ok_or_else(|| {
+                    FindCamerabyIdError(QCError::new(
+                        "Missing or invalid 'url' field".to_string(),
+                        None,
+                    ))
+                })?
+                .to_string();
+
+            let permanent_stream_url = item
+                .get("permanentStreamUrl")
+                .and_then(|v| v.as_s().ok())
+                .map(|s| s.to_string());
+
+            let created_at = item
+                .get("createdAt")
+                .and_then(|v| v.as_s().ok())
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&Utc))
+                .ok_or_else(|| {
+                    FindCamerabyIdError(QCError::new(
+                        "Missing or invalid 'createdAt' field".to_string(),
+                        None,
+                    ))
+                })?;
+
+            let updated_at = item
+                .get("updatedAt")
+                .and_then(|v| v.as_s().ok())
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&Utc))
+                .ok_or_else(|| {
+                    FindCamerabyIdError(QCError::new(
+                        "Missing or invalid 'updatedAt' field".to_string(),
+                        None,
+                    ))
+                })?;
+
+            Ok(FindCameraByIdResult {
+                id,
+                name,
+                source_url,
+                permanent_stream_url,
+                created_at,
+                updated_at,
+            })
+        } else {
+            Err(FindCamerabyIdError(QCError::new(
+                "Camera not found".to_string(),
+                None,
+            )))
+        }
+    }
+
+
+    async fn camera_exists_by_id(
+            &self,
+            id: &str,
+        ) -> Result<bool, CheckIfCameraExistsError> {
+        let result = self
+            .client
+            .get_item()
+            .projection_expression("partitionKey, sortKey")
+            .table_name(&self.table)
+            .key("partitionKey", AttributeValue::S("camera".to_string()))
+            .key("sortKey", AttributeValue::S(id.to_string()))
+            .send()
+            .await
+            .map_err(|err| {
+                CheckIfCameraExistsError(QCError::new(
+                    "failed to check if camera exists in database".to_string(),
+                    Some(format!("{:?}", err)),
+                ))
+            })?;
+
+        Ok(result.item.is_some())
     }
 }

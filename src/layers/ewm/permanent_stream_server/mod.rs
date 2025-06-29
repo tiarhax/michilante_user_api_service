@@ -68,7 +68,7 @@ impl IPermanentStreamServer for PermanentStreamServer {
         })?;
         Ok(streams)
     }
-
+    //TODO: Get the permanent stream URL and store it to database.
     async fn put_stream(&self, input: AddStreamInput) -> Result<AddCreationOutput, PermanentStreamAPIError> {
         let base_url = self.base_url.clone();
         let url = format!("{}/streams/permanent/{}", base_url, input.id);

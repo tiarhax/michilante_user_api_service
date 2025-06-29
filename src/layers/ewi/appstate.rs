@@ -27,7 +27,8 @@ pub struct AppState {
 #[derive(Clone)]
 pub struct AppConfig {
     pub dynamo_db_table: String,
-    pub permanent_relay_server_base_url: String
+    pub permanent_relay_server_base_url: String,
+    pub temporary_stream_server_base_url: String
 }
 
 

@@ -55,7 +55,11 @@ fn read_app_config_from_env() -> Result<AppConfig, ReadConfigErr> {
         reason: format!("Failed to read PERMANENT_STREAM_SERVER_URL from env: {:?}", err),
     })?;
 
-    Ok(AppConfig { dynamo_db_table, permanent_relay_server_base_url })
+    let temporary_stream_server_base_url = env::var("TEMPORARY_STREAM_SERVER_URL").map_err(|err| ReadConfigErr {
+        reason: format!("Failed to read TEMPORARY_STREAM_SERVER_URL from env: {:?}", err),
+    })?;
+
+    Ok(AppConfig { dynamo_db_table, permanent_relay_server_base_url, temporary_stream_server_base_url })
 }
 pub async fn setup_and_run() -> Result<(), StartupServerError> {
     tracing_subscriber::fmt::init();
