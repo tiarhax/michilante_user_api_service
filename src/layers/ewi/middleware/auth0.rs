@@ -10,7 +10,7 @@ use crate::layers::ewi::appstate::{auth0::Auth0State, AppState};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
     pub sub: String,
-    pub aud: String,
+    pub aud: Vec<String>,
     pub iss: String,
     pub exp: usize,
     pub iat: usize,
