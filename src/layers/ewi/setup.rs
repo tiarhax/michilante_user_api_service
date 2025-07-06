@@ -1,14 +1,12 @@
-use std::sync::Arc;
 
-use aws_config::{BehaviorVersion, SdkConfig};
-use axum::{
-    routing::{delete, get, post, put},
-    Router,
-};
+use aws_config::{BehaviorVersion};
+
+use axum::{middleware, Router};
+use tower::ServiceBuilder;
+use tower_http::cors::CorsLayer;
 
 use crate::layers::ewi::{
-    appstate::{AppConfig, AppState},
-    endpoints,
+    appstate::{auth0::{Auth0Config, Auth0State}, AppConfig, AppState}, endpoints, middleware::auth0::{self, auth0_middleware}
 };
 use std::env;
 
@@ -61,6 +59,26 @@ fn read_app_config_from_env() -> Result<AppConfig, ReadConfigErr> {
 
     Ok(AppConfig { dynamo_db_table, permanent_relay_server_base_url, temporary_stream_server_base_url })
 }
+
+fn read_auth0_config_from_env() -> Result<Auth0Config, ReadConfigErr> {
+    let auth0_domain = env::var("AUTH0_DOMAIN").map_err(|err| ReadConfigErr {
+        reason: format!("Failed to read AUTH0_DOMAIN from env: {:?}", err),
+    })?;
+
+    let auth0_audience = env::var("AUTH0_AUDIENCE").map_err(|err| ReadConfigErr {
+        reason: format!("Failed to read AUTH0_AUDIENCE from env: {:?}", err),
+    })?;
+
+    let auth0_issuer = env::var("AUTH0_ISSUER").map_err(|err| ReadConfigErr {
+        reason: format!("Failed to read AUTH0_ISSUER from env: {:?}", err),
+    })?;
+
+    Ok(Auth0Config {
+        domain: auth0_domain,
+        audience: auth0_audience,
+        issuer: auth0_issuer
+    })
+}
 pub async fn setup_and_run() -> Result<(), StartupServerError> {
     tracing_subscriber::fmt::init();
     dotenvy::dotenv().map_err(|e| {
@@ -76,13 +94,25 @@ pub async fn setup_and_run() -> Result<(), StartupServerError> {
     let server_config = read_server_config_from_env().map_err(|err| StartupServerError {
         reason: format!("Failed to read server config: {:?}", err),
     })?;
+    let auth0_config = read_auth0_config_from_env().map_err(|err| StartupServerError {
+        reason: format!("Failed to read auth0 config: {:?}", err),
+    })?;
+
+    let auth0_state = Auth0State::new(auth0_config);
 
     let app_state = AppState {
         app_config,
         aws_config: aws_sdk_config,
+        auth0: auth0_state
     };
 
-    let app = endpoints::setup_routes(Router::new()).with_state(app_state);
+    let app = endpoints::setup_routes(Router::new())
+        .with_state(app_state.clone())
+        .layer(
+            ServiceBuilder::new()
+                .layer(CorsLayer::permissive())
+                .layer(middleware::from_fn_with_state(app_state.clone(), auth0_middleware))
+        );
 
     let bind_str = format!("{}:{}", server_config.http_host, server_config.http_port);
 

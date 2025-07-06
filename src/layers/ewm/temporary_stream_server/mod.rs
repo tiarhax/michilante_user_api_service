@@ -56,7 +56,7 @@ impl ITemporaryStreamServer for TemporaryStreamServer {
         let request_body = CreateStreamRequestBody {
             name: camera_id.to_owned(),
             source_url: source_camera_stream_url.to_owned(),
-            down_scale: false,
+            down_scale: true,
             expirable: true,
         };
         let url = format!("{}/streams", self.base_url);
