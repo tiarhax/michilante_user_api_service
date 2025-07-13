@@ -81,11 +81,10 @@ fn read_auth0_config_from_env() -> Result<Auth0Config, ReadConfigErr> {
 }
 pub async fn setup_and_run() -> Result<(), StartupServerError> {
     tracing_subscriber::fmt::init();
-    dotenvy::dotenv().map_err(|e| {
-        StartupServerError {
-            reason: format!("{:?}", e)
-        }
-    })?;
+    match dotenvy::dotenv() {
+        Ok(_) => tracing::info!(".env file loadad"),
+        Err(_) => tracing::warn!(".env file not found, variables should be already present"),
+    };
     let aws_sdk_config = aws_config::load_defaults(BehaviorVersion::v2025_01_17()).await;
     let app_config = read_app_config_from_env().map_err(|err| StartupServerError {
         reason: format!("Failed to read app config: {:?}", err),

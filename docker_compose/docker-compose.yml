@@ -1,0 +1,7 @@
+services:
+  user_api_server:
+    image: tiarhax/michilante_user_api_server:latest
+    network_mode: "host"
+    env_file: user_api_server.env
+    ports:
+      - "${HTTP_PORT}:${HTTP_PORT}"
