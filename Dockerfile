@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y \
     openssl \
     ca-certificates \
     pkg-config \
+    iproute2 \
     curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*

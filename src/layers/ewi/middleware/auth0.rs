@@ -24,7 +24,9 @@ async fn validate_jwt(
     token: &str,
 ) -> Result<Claims, Box<dyn std::error::Error + Send + Sync>> {
     // Decode header to get kid
+    tracing::info!("decoding header");
     let header = decode_header(token)?;
+    tracing::info!("header decoded");
     let kid = header.kid.ok_or("Missing kid in JWT header")?;
 
     // Get decoding key
@@ -34,7 +36,7 @@ async fn validate_jwt(
     let mut validation = Validation::new(Algorithm::RS256);
     validation.set_audience(&[&state.auth0_config.audience]);
     validation.set_issuer(&[&state.auth0_config.issuer]);
-
+    tracing::info!("introduced token: {}", token);
     // Decode and validate token
     let token_data = decode::<Claims>(token, &decoding_key, &validation)?;
 
@@ -65,7 +67,6 @@ pub async fn auth0_middleware(
         tracing::error!("Eror extracting token");
         e
     })?;
-    tracing::info!("received token: {}", token);
     let claims = validate_jwt(&state.auth0, &token).await
         .map_err(|e| {
             tracing::error!("error validating jwt {:?}", e);
