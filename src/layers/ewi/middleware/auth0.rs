@@ -16,6 +16,9 @@ pub struct Claims {
     pub iat: usize,
     pub scope: Option<String>,
     pub permissions: Option<Vec<String>>,
+    #[serde(rename = "https://michilante.tiarhax.com/roles")]
+
+    pub roles: Option<Vec<String>>,
 }
 
 

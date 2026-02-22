@@ -17,7 +17,8 @@ pub struct InternalError {
 #[derive(Debug)]
 pub enum AppError {
     UserInputError(UserInputError),
-    InternalError(InternalError)
+    InternalError(InternalError),
+    Forbidden(String),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -55,6 +56,9 @@ impl IntoResponse for AppError {
             },
             AppError::InternalError(internal_error) => {
                 (http::StatusCode::INTERNAL_SERVER_ERROR, internal_error.debug_message, None)
+            },
+            AppError::Forbidden(msg) => {
+                (http::StatusCode::FORBIDDEN, msg, None)
             },
         };
 

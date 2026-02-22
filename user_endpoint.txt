@@ -1,0 +1,7 @@
+Add an endpoint that allows Admin users to create a camera temporary blocking.
+The endpoint should receive:
+- camera_id
+- start_time
+- end_time
+- user_ids (array of user ids to block)
+ 

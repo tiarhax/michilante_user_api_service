@@ -4,10 +4,15 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::layers::{
     business::usecases::{
         create_camera::{CreateCameraInput, CreateCameraOutput, CreateCameraUseCase},
+        create_camera_temp_blocking::{
+            implementation::CreateCameraTempBlockingUseCaseImp,
+            interface::{CreateCameraTempBlockingInput, ICreateCameraTempBlockingUseCase},
+        },
         delete_camera::{implementation::DeleteCameraUseCase, interface::IDeleteCameraUseCase},
         get_camera_stream_url::{
             implementation::GetCameraStreamUrlUseCase, interface::IGetCameraStremaURLUseCase,
@@ -21,15 +26,18 @@ use crate::layers::{
             interface::{IPutCameraUseCase, PutCameraInput, PutCameraOutput},
         },
     },
-    ewi::{appstate::AppState, error::AppError, providers::permanent_stream_server},
+    ewi::{appstate::{auth0::User, AppState}, error::AppError},
     ewm::{
-        main_database::qc_collection::camera_qc_collection::CameraQCCollection,
+        main_database::qc_collection::{
+            camera_qc_collection::CameraQCCollection,
+            camera_temp_blocking_qc_collection::CameraTempBlockingQCCollection,
+        },
         permanent_stream_server::PermanentStreamServer,
         temporary_stream_server::TemporaryStreamServer,
     },
 };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct CameraResultItem {
     id: String,
     name: String,
@@ -46,6 +54,14 @@ impl From<CameraListItem> for CameraResultItem {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/cameras",
+    tag = "cameras",
+    responses(
+        (status = 200, description = "List all cameras", body = Vec<CameraResultItem>)
+    )
+)]
 pub async fn list_cameras(
     State(camera_qc_collection): State<CameraQCCollection>,
 ) -> Result<Json<Vec<CameraResultItem>>, AppError> {
@@ -64,7 +80,7 @@ pub async fn list_cameras(
     Ok(Json(result))
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct CameraCreationHTTPResponseBody {
     pub id: String,
     pub name: String,
@@ -72,7 +88,7 @@ pub struct CameraCreationHTTPResponseBody {
     pub created_at: String,
     pub updated_at: String,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateCameraHttpInput {
     pub name: String,
     pub source_url: String,
@@ -98,6 +114,15 @@ impl From<CreateCameraOutput> for CameraCreationHTTPResponseBody {
         }
     }
 }
+#[utoipa::path(
+    post,
+    path = "/cameras",
+    tag = "cameras",
+    request_body = CreateCameraHttpInput,
+    responses(
+        (status = 200, description = "Camera created successfully", body = CameraCreationHTTPResponseBody)
+    )
+)]
 pub async fn create_camera(
     State(camera_qc_collection): State<CameraQCCollection>,
     State(permanent_stream_server): State<PermanentStreamServer>,
@@ -113,13 +138,13 @@ pub async fn create_camera(
     Ok(Json(result.into()))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct UpdateCameraHttpInput {
     pub name: String,
     pub source_url: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct CameraUpdateHTTPResponseBody {
     pub id: String,
     pub name: String,
@@ -140,6 +165,18 @@ impl From<PutCameraOutput> for CameraUpdateHTTPResponseBody {
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/cameras/{id}",
+    tag = "cameras",
+    params(
+        ("id" = String, Path, description = "Camera ID")
+    ),
+    request_body = UpdateCameraHttpInput,
+    responses(
+        (status = 200, description = "Camera updated successfully", body = CameraUpdateHTTPResponseBody)
+    )
+)]
 pub async fn put_camera(
     Path(id): Path<String>,
     State(camera_qc_collection): State<CameraQCCollection>,
@@ -163,6 +200,17 @@ pub async fn put_camera(
     Ok(Json(use_case_out.into()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/cameras/{id}",
+    tag = "cameras",
+    params(
+        ("id" = String, Path, description = "Camera ID")
+    ),
+    responses(
+        (status = 200, description = "Camera deleted successfully")
+    )
+)]
 pub async fn delete_camera(
     Path(id): Path<String>,
     State(camera_qc_collection): State<CameraQCCollection>,
@@ -177,12 +225,23 @@ pub async fn delete_camera(
     Ok(())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CameraStreamHttpResponseBody {
     camera_id: String,
     temp_rtsp_url: String,
     expiration_date: String,
 }
+#[utoipa::path(
+    get,
+    path = "/cameras/{id}/temp-stream",
+    tag = "cameras",
+    params(
+        ("id" = String, Path, description = "Camera ID")
+    ),
+    responses(
+        (status = 200, description = "Temporary stream URL", body = CameraStreamHttpResponseBody)
+    )
+)]
 pub async fn get_camera_stream_url(
     Path(id): Path<String>,
     State(camera_qc_collection): State<CameraQCCollection>,
@@ -201,6 +260,50 @@ pub async fn get_camera_stream_url(
     }))
 }
 
+#[derive(Deserialize, ToSchema)]
+pub struct CreateCameraTempBlockingHttpInput {
+    pub camera_id: String,
+    pub start_time: String,
+    pub end_time: String,
+    pub user_ids: Vec<String>,
+}
+
+#[utoipa::path(
+    post,
+    path = "/cameras/temp-blocking",
+    tag = "cameras",
+    request_body = CreateCameraTempBlockingHttpInput,
+    responses(
+        (status = 200, description = "Camera temp blocking created successfully"),
+        (status = 403, description = "Forbidden - Admin role required")
+    )
+)]
+pub async fn create_camera_temp_blocking(
+    State(camera_temp_blocking_qc_collection): State<CameraTempBlockingQCCollection>,
+    user: User,
+    Json(input): Json<CreateCameraTempBlockingHttpInput>,
+) -> Result<(), AppError> {
+    if !user.roles.contains(&"Admin".to_string()) {
+        return Err(AppError::Forbidden("Admin role required".to_string()));
+    }
+
+    let use_case = CreateCameraTempBlockingUseCaseImp::new(camera_temp_blocking_qc_collection);
+
+    let use_case_input = CreateCameraTempBlockingInput {
+        camera_id: input.camera_id,
+        start_time: input.start_time,
+        end_time: input.end_time,
+        user_ids: input.user_ids,
+    };
+
+    use_case
+        .execute(use_case_input)
+        .await
+        .map_err(|err| AppError::from_use_case_error(err, None))?;
+
+    Ok(())
+}
+
 pub fn setup_endpoints(router: Router<AppState>) -> Router<AppState> {
     router
         .route("/cameras", get(list_cameras))
@@ -208,4 +311,5 @@ pub fn setup_endpoints(router: Router<AppState>) -> Router<AppState> {
         .route("/cameras/{id}", put(put_camera))
         .route("/cameras/{id}", delete(delete_camera))
         .route("/cameras/{id}/temp-stream", get(get_camera_stream_url))
+        .route("/cameras/temp-blocking", post(create_camera_temp_blocking))
 }

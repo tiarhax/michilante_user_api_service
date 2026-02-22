@@ -1,9 +1,15 @@
 use std::{collections::HashMap, sync::Arc};
 
+use axum::{
+    extract::FromRequestParts,
+    http::{request::Parts, StatusCode},
+};
 use jsonwebtoken::DecodingKey;
 use reqwest::Client;
 use serde::Deserialize;
 use tokio::sync::RwLock;
+
+use crate::layers::ewi::middleware::auth0::Claims;
 
 #[derive(Clone)]
 pub struct Auth0Config {
@@ -26,6 +32,31 @@ pub struct Jwk {
     pub n: String,
     pub e: String,
     pub alg: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct User {
+    pub id: String,
+    pub roles: Vec<String>,
+}
+
+impl<S> FromRequestParts<S> for User
+where
+    S: Send + Sync,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let claims = parts
+            .extensions
+            .get::<Claims>()
+            .ok_or(StatusCode::UNAUTHORIZED)?;
+
+        Ok(User {
+            id: claims.sub.clone(),
+            roles: claims.roles.clone().unwrap_or_default(),
+        })
+    }
 }
 
 

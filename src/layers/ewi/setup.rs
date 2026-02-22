@@ -1,12 +1,14 @@
 
-use aws_config::{BehaviorVersion};
+use aws_config::BehaviorVersion;
 
 use axum::{middleware, Router};
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 use crate::layers::ewi::{
-    appstate::{auth0::{Auth0Config, Auth0State}, AppConfig, AppState}, endpoints, middleware::auth0::{self, auth0_middleware}
+    appstate::{auth0::{Auth0Config, Auth0State}, AppConfig, AppState}, endpoints, middleware::auth0::auth0_middleware, openapi::ApiDoc
 };
 use std::env;
 
@@ -111,7 +113,8 @@ pub async fn setup_and_run() -> Result<(), StartupServerError> {
             ServiceBuilder::new()
                 .layer(CorsLayer::permissive())
                 .layer(middleware::from_fn_with_state(app_state.clone(), auth0_middleware))
-        );
+        )
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()));
 
     let bind_str = format!("{}:{}", server_config.http_host, server_config.http_port);
 

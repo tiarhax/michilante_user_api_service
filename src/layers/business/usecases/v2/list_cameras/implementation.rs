@@ -136,6 +136,10 @@ mod tests {
         async fn list_temp_blocking_for_user(&self, _user_id: &str) -> Result<Vec<CameraTempBlocking>, ListCameraTempBlockingsQueryError> {
             Ok(vec![])
         }
+
+        async fn create_temp_blocking(&self, _input: crate::layers::ewm::main_database::qc_collection::camera_temp_blocking_qc_collection::CreateCameraTempBlockingInput) -> Result<(), crate::layers::ewm::main_database::qc_collection::camera_temp_blocking_qc_collection::CreateCameraTempBlockingError> {
+            Ok(())
+        }
     }
 
     #[tokio::test]
