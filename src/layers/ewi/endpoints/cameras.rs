@@ -17,6 +17,14 @@ use crate::layers::{
         get_camera_stream_url::{
             implementation::GetCameraStreamUrlUseCase, interface::IGetCameraStremaURLUseCase,
         },
+        delete_camera_temp_blocking::{
+            implementation::DeleteCameraTempBlockingUseCaseImp,
+            interface::{DeleteCameraTempBlockingInput, IDeleteCameraTempBlockingUseCase},
+        },
+        list_camera_temp_blockings_by_camera::{
+            implementation::ListCameraTempBlockingsByCameraUseCaseImp,
+            interface::IListCameraTempBlockingsByCameraUseCase,
+        },
         list_cameras::{
             implementation::ListCamerasUseCaseImp,
             interface::{CameraListItem, IListCamerasUseCase},
@@ -31,6 +39,7 @@ use crate::layers::{
         main_database::qc_collection::{
             camera_qc_collection::CameraQCCollection,
             camera_temp_blocking_qc_collection::CameraTempBlockingQCCollection,
+            user_qc_collection::UserQCCollection,
         },
         permanent_stream_server::PermanentStreamServer,
         temporary_stream_server::TemporaryStreamServer,
@@ -304,6 +313,90 @@ pub async fn create_camera_temp_blocking(
     Ok(())
 }
 
+#[derive(Serialize, ToSchema)]
+pub struct BlockedUserHttpResponse {
+    pub user_id: String,
+    pub user_name: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct CameraTempBlockingHttpResponseItem {
+    pub id: String,
+    pub camera_id: String,
+    pub end_date: String,
+    pub blocked_user: BlockedUserHttpResponse,
+}
+
+#[utoipa::path(
+    get,
+    path = "/cameras/{id}/temp-blockings",
+    tag = "cameras",
+    params(
+        ("id" = String, Path, description = "Camera ID")
+    ),
+    responses(
+        (status = 200, description = "List of temp blockings for the camera", body = Vec<CameraTempBlockingHttpResponseItem>)
+    )
+)]
+pub async fn list_camera_temp_blockings_by_camera(
+    Path(id): Path<String>,
+    State(camera_temp_blocking_qc_collection): State<CameraTempBlockingQCCollection>,
+    State(user_qc_collection): State<UserQCCollection>,
+) -> Result<Json<Vec<CameraTempBlockingHttpResponseItem>>, AppError> {
+    let use_case = ListCameraTempBlockingsByCameraUseCaseImp::new(camera_temp_blocking_qc_collection, user_qc_collection);
+
+    let blockings = use_case
+        .execute(&id)
+        .await
+        .map_err(|err| AppError::from_use_case_error(err, None))?;
+
+    let result = blockings
+        .into_iter()
+        .map(|b| CameraTempBlockingHttpResponseItem {
+            id: b.id,
+            camera_id: b.camera_id,
+            end_date: b.end_date,
+            blocked_user: BlockedUserHttpResponse {
+                user_id: b.blocked_user.user_id,
+                user_name: b.blocked_user.user_name,
+            },
+        })
+        .collect();
+
+    Ok(Json(result))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/cameras/{camera_id}/temp-blockings/{user_id}",
+    tag = "cameras",
+    params(
+        ("camera_id" = String, Path, description = "Camera ID"),
+        ("user_id" = String, Path, description = "User ID")
+    ),
+    responses(
+        (status = 200, description = "Temp blocking deleted successfully")
+    )
+)]
+pub async fn delete_camera_temp_blocking(
+    Path((camera_id, user_id)): Path<(String, String)>,
+    State(camera_temp_blocking_qc_collection): State<CameraTempBlockingQCCollection>,
+    user: User,
+) -> Result<(), AppError> {
+    if !user.roles.contains(&"Admin".to_string()) {
+        return Err(AppError::Forbidden("Admin role required".to_string()));
+    }
+
+    let use_case = DeleteCameraTempBlockingUseCaseImp::new(camera_temp_blocking_qc_collection);
+
+    use_case
+        .execute(DeleteCameraTempBlockingInput { camera_id, user_id })
+        .await
+        .map_err(|err| AppError::from_use_case_error(err, None))?;
+
+    Ok(())
+}
+
 pub fn setup_endpoints(router: Router<AppState>) -> Router<AppState> {
     router
         .route("/cameras", get(list_cameras))
@@ -311,5 +404,7 @@ pub fn setup_endpoints(router: Router<AppState>) -> Router<AppState> {
         .route("/cameras/{id}", put(put_camera))
         .route("/cameras/{id}", delete(delete_camera))
         .route("/cameras/{id}/temp-stream", get(get_camera_stream_url))
+        .route("/cameras/{id}/temp-blockings", get(list_camera_temp_blockings_by_camera))
+        .route("/cameras/{camera_id}/temp-blockings/{user_id}", delete(delete_camera_temp_blocking))
         .route("/cameras/temp-blocking", post(create_camera_temp_blocking))
 }

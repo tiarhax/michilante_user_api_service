@@ -1,7 +1,8 @@
 use utoipa::OpenApi;
 
 use super::endpoints::cameras::{
-    CameraCreationHTTPResponseBody, CameraResultItem, CameraStreamHttpResponseBody,
+    BlockedUserHttpResponse, CameraCreationHTTPResponseBody, CameraResultItem,
+    CameraStreamHttpResponseBody, CameraTempBlockingHttpResponseItem,
     CameraUpdateHTTPResponseBody, CreateCameraHttpInput, CreateCameraTempBlockingHttpInput,
     UpdateCameraHttpInput,
 };
@@ -22,6 +23,8 @@ use super::endpoints::users::UserResultItem;
         super::endpoints::cameras::delete_camera,
         super::endpoints::cameras::get_camera_stream_url,
         super::endpoints::cameras::create_camera_temp_blocking,
+        super::endpoints::cameras::list_camera_temp_blockings_by_camera,
+        super::endpoints::cameras::delete_camera_temp_blocking,
         super::endpoints::camerasv2::list_cameras_v2,
         super::endpoints::users::list_users,
     ),
@@ -35,6 +38,8 @@ use super::endpoints::users::UserResultItem;
             CameraStreamHttpResponseBody,
             CameraResultItemV2,
             CreateCameraTempBlockingHttpInput,
+            CameraTempBlockingHttpResponseItem,
+            BlockedUserHttpResponse,
             UserResultItem,
         )
     ),

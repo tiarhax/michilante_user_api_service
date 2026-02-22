@@ -137,8 +137,20 @@ mod tests {
             Ok(vec![])
         }
 
+        async fn list_temp_blocking_for_camera(&self, _camera_id: &str) -> Result<Vec<CameraTempBlocking>, ListCameraTempBlockingsQueryError> {
+            Ok(vec![])
+        }
+
         async fn create_temp_blocking(&self, _input: crate::layers::ewm::main_database::qc_collection::camera_temp_blocking_qc_collection::CreateCameraTempBlockingInput) -> Result<(), crate::layers::ewm::main_database::qc_collection::camera_temp_blocking_qc_collection::CreateCameraTempBlockingError> {
             Ok(())
+        }
+
+        async fn delete_temp_blocking(&self, _camera_id: &str, _user_id: &str) -> Result<(), crate::layers::ewm::main_database::qc_collection::camera_temp_blocking_qc_collection::DeleteCameraTempBlockingError> {
+            Ok(())
+        }
+
+        async fn get_temp_blocking(&self, _camera_id: &str, _user_id: &str) -> Result<Option<CameraTempBlocking>, crate::layers::ewm::main_database::qc_collection::camera_temp_blocking_qc_collection::GetCameraTempBlockingError> {
+            Ok(None)
         }
     }
 

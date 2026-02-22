@@ -6,3 +6,5 @@ pub mod get_camera_stream_url;
 pub mod v2;
 pub mod list_users;
 pub mod create_camera_temp_blocking;
+pub mod delete_camera_temp_blocking;
+pub mod list_camera_temp_blockings_by_camera;
