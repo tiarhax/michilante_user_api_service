@@ -21,6 +21,10 @@ use crate::layers::{
             implementation::DeleteCameraTempBlockingUseCaseImp,
             interface::{DeleteCameraTempBlockingInput, IDeleteCameraTempBlockingUseCase},
         },
+        list_blockable_users_for_camera::{
+            implementation::ListBlockableUsersForCameraUseCaseImp,
+            interface::IListBlockableUsersForCameraUseCase,
+        },
         list_camera_temp_blockings_by_camera::{
             implementation::ListCameraTempBlockingsByCameraUseCaseImp,
             interface::IListCameraTempBlockingsByCameraUseCase,
@@ -366,6 +370,54 @@ pub async fn list_camera_temp_blockings_by_camera(
     Ok(Json(result))
 }
 
+#[derive(Serialize, ToSchema)]
+pub struct BlockableUserHttpResponseItem {
+    pub user_id: String,
+    pub email: String,
+    pub name: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/cameras/{id}/blockable-users",
+    tag = "cameras",
+    params(
+        ("id" = String, Path, description = "Camera ID")
+    ),
+    responses(
+        (status = 200, description = "List of users that can be blocked from the camera", body = Vec<BlockableUserHttpResponseItem>),
+        (status = 403, description = "Forbidden - Admin role required")
+    )
+)]
+pub async fn list_blockable_users_for_camera(
+    Path(id): Path<String>,
+    State(camera_temp_blocking_qc_collection): State<CameraTempBlockingQCCollection>,
+    State(user_qc_collection): State<UserQCCollection>,
+    user: User,
+) -> Result<Json<Vec<BlockableUserHttpResponseItem>>, AppError> {
+    if !user.roles.contains(&"Admin".to_string()) {
+        return Err(AppError::Forbidden("Admin role required".to_string()));
+    }
+
+    let use_case = ListBlockableUsersForCameraUseCaseImp::new(camera_temp_blocking_qc_collection, user_qc_collection);
+
+    let users = use_case
+        .execute(&id)
+        .await
+        .map_err(|err| AppError::from_use_case_error(err, None))?;
+
+    let result = users
+        .into_iter()
+        .map(|u| BlockableUserHttpResponseItem {
+            user_id: u.user_id,
+            email: u.email,
+            name: u.name,
+        })
+        .collect();
+
+    Ok(Json(result))
+}
+
 #[utoipa::path(
     delete,
     path = "/cameras/{camera_id}/temp-blockings/{user_id}",
@@ -405,6 +457,7 @@ pub fn setup_endpoints(router: Router<AppState>) -> Router<AppState> {
         .route("/cameras/{id}", delete(delete_camera))
         .route("/cameras/{id}/temp-stream", get(get_camera_stream_url))
         .route("/cameras/{id}/temp-blockings", get(list_camera_temp_blockings_by_camera))
+        .route("/cameras/{id}/blockable-users", get(list_blockable_users_for_camera))
         .route("/cameras/{camera_id}/temp-blockings/{user_id}", delete(delete_camera_temp_blocking))
         .route("/cameras/temp-blocking", post(create_camera_temp_blocking))
 }
